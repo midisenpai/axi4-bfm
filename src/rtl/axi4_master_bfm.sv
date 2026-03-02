@@ -258,7 +258,7 @@ module axi4_master_bfm #(parameter BFM_NAME="test") (conn);
       begin
 	 put_aw_beat(.awvalid('1),
 		     .awaddr(awaddr),
-		     .awsize(num_wdata_bits/8),
+		     .awsize($clog2(num_wdata_bits/8)),
 		     .awcache('0),
 		     .awprot('0),
 		     .awlock('0),
@@ -283,12 +283,12 @@ module axi4_master_bfm #(parameter BFM_NAME="test") (conn);
       begin
 	 put_aw_beat(.awvalid('1),
 		     .awaddr(awaddr),
-		     .awsize(num_wdata_bits/8),
+		     .awsize($clog2(num_wdata_bits/8)),
 		     .awcache('0),
 		     .awprot('0),
 		     .awlock('0),
 		     .awregion('0),
-		     .awburst('0),
+		     .awburst(2'h1), // Default to incrementing burst type
 		     .awid('0),
 		     .awlen(awlen),
 		     .awqos('0),
@@ -463,8 +463,8 @@ module axi4_master_bfm #(parameter BFM_NAME="test") (conn);
 		     .arprot(0),
 		     .arlock(0),
 		     .arregion(0),
-		     .arsize(conn.NUM_DATA_BITS/8),
-		     .arburst(0),
+		     .arsize($clog2(conn.NUM_DATA_BITS/8)),
+		     .arburst(2'h1),
 		     .arid(0),
 		     .arlen(arlen),
 		     .arqos(0),
@@ -487,7 +487,7 @@ module axi4_master_bfm #(parameter BFM_NAME="test") (conn);
 
       begin
 	 put_ar_beat(.araddr(araddr),
-		     .arsize(num_wdata_bits/8),
+		     .arsize($clog2(num_wdata_bits/8)),
 		     .arcache('0),
 		     .arprot('0),
 		     .arlock('0),
@@ -555,18 +555,63 @@ module axi4_master_bfm #(parameter BFM_NAME="test") (conn);
    endtask // write_beat
 
 
-   // Read a single beat using the AXI4 full bus
-   task read_beat;
-      input logic [num_araddr_bits-1:0] araddr;
+  // Read a single beat using the AXI4 full bus
+  task read_beat;
+    input logic [num_araddr_bits-1:0] araddr;
 
-      begin
-	 // Write address beat
-	 put_simple_ar_beat(.araddr(araddr),
-			    .arlen(0));
+    begin
+      // Write address beat
+      put_simple_ar_beat(.araddr(araddr),
+	.arlen(0));
 
-	 // Wait for read response
-      end
-   endtask // read_beat
+    end
+  endtask // read_beat
+
+  // Read a single beat using the AXI4 full bus
+  task read;
+    input logic [num_araddr_bits-1:0] addr;
+    output logic [num_rdata_bits-1:0] data;
+
+    input logic [num_arlen_bits-1:0]  len = '0;   // number of burst beats - 1
+    begin
+      // Write address beat
+      put_simple_ar_beat(
+        .araddr(addr),
+	.arlen(len)
+      );
+
+      // Wait for read response
+      read_data.expect_beat(32'h0);
+      read_data.get_beat(data);
+
+    end
+  endtask // read_beat
+
+
+  // Write a single beat to the AXI4 full bus
+  task write;
+    input logic [num_awaddr_bits-1:0] addr;
+    input logic [num_wdata_bits-1:0]  data;
+    output logic [num_bresp_bits-1:0] resp;
+
+    begin
+      // Write address beat
+      put_simple_aw_beat(
+        .awaddr(addr),
+	.awlen(0)
+      );
+
+      // Write data beat
+      put_simple_w_beat(
+        .wdata(data),
+	.wlast('1)
+      );
+
+      // Wait for write response
+      bresp.expect_beat(2'h1);
+      bresp.get_beat(resp);
+    end
+  endtask // write_beat
 
 
    ////////////////////////////////////////////////////////////////////////////
